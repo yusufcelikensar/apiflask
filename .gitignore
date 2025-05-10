@@ -1,0 +1,15 @@
+# Sanal ortam klasörü
+api_env/
+venv/
+.venv/
+
+# Hassas bilgiler içeren .env dosyası
+.env
+
+# Python cache ve derlenmiş dosyaları
+__pycache__/
+*.py[cod]
+
+# Diğer işletim sistemi veya IDE dosyaları (isteğe bağlı)
+.DS_Store
+Thumbs.db
