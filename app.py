@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Farklı kaynaklardan gelen isteklere izin vermek için (Wix'ten test ederken gerekebilir)
+CORS(app)  # Farklı kaynaklardan gelen isteklere izin vermek için
 
 # Veritabanı bağlantı bilgilerini ortam değişkenlerinden al
 DB_HOST = os.getenv('DB_HOST')
@@ -42,6 +42,7 @@ def home():
 def get_leaderboard():
     """
     Üyelerin puanlarına göre sıralandığı bir liderlik tablosu döndürür (ilk 10 üye).
+    Her bir üye objesine Wix Repeater için benzersiz bir '_id' alanı eklenir.
     """
     conn = None
     try:
@@ -49,30 +50,33 @@ def get_leaderboard():
         if conn is None:
             return jsonify({"error": "Veritabanı bağlantısı kurulamadı."}), 500
 
-        # DictCursor, sonuçları sözlük gibi almanızı sağlar
         with conn.cursor(cursor_factory=DictCursor) as cur:
-            # Puanı 0'dan büyük olan ilk 10 üyeyi çek
-            # Bu sorgu denemeler.py dosyanızdaki update_leaderboard fonksiyonuna benzer
+            # 'members' tablosunda 'id' adında bir primary key sütunu olduğunu varsayıyoruz.
+            # Bu 'id' sütununu da sorguya dahil ediyoruz.
             cur.execute("""
-                SELECT name, points
+                SELECT id, name, points
                 FROM members
                 WHERE points > 0
                 ORDER BY points DESC
                 LIMIT 10
             """)
-            leaderboard_data = cur.fetchall()
+            leaderboard_data_from_db = cur.fetchall()
 
-        # Veriyi JSON formatına uygun hale getir (DictRow'ları dict'e çevir)
-        leaderboard_list = [dict(row) for row in leaderboard_data]
+        leaderboard_list_for_wix = []
+        if leaderboard_data_from_db:
+            for row in leaderboard_data_from_db:
+                leaderboard_list_for_wix.append({
+                    "_id": str(row["id"]),  # Veritabanındaki 'id'yi string olarak '_id' anahtarına ata
+                    "name": row["name"],
+                    "points": row["points"]
+                })
 
-        return jsonify(leaderboard_list)
+        return jsonify(leaderboard_list_for_wix)
 
     except psycopg2.Error as e:
-        # Veritabanı ile ilgili bir hata oluşursa
         print(f"Liderlik tablosu alınırken veritabanı hatası: {e}")
-        return jsonify({"error": "Veritabanı hatası.", "details": str(e)}), 500
+        return jsonify({"error": "Veritabanı hatası.", "details": str(e.pgcode) if hasattr(e, 'pgcode') else str(e)}), 500
     except Exception as e:
-        # Beklenmedik başka bir hata oluşursa
         print(f"Liderlik tablosu alınırken genel hata: {e}")
         return jsonify({"error": "Beklenmedik bir hata oluştu.", "details": str(e)}), 500
     finally:
@@ -82,4 +86,4 @@ def get_leaderboard():
 if __name__ == '__main__':
     # Debug modu geliştirme aşamasında faydalıdır, canlıya alırken kapatılmalıdır.
     # Host='0.0.0.0' API'nin ağdaki diğer cihazlardan erişilebilir olmasını sağlar.
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000) # Yerel test için port 5000
